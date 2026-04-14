@@ -456,6 +456,8 @@ builtins.derivation {
 }
 ```
 
+Creates a file with text (show build `nix-build ./bare-bones.nix`)
+
 Takeaway:
 
 - derivations are not magic
@@ -479,7 +481,7 @@ Common outputs:
 - `apps`
 - `checks`
 
-So yes:
+<br />
 
 > a flake is mostly an attribute set with a specific structure
 
@@ -523,30 +525,89 @@ Think of it as:
 
 # Devenv downsides
 
-- another abstraction layer to learn
-- sometimes harder to understand what raw Nix is doing underneath
-- teams can depend on magic instead of learning the fundamentals
+- magic
 - version/debugging issues can cross tool boundaries
 
-Recommendation:
+```nix
+# devenv.nix
+{
+  services.postgres = {
+    enable = true;
+  };
+}
+```
 
-- learn the Nix mental model first
-- then use `devenv` for speed
+```nix
+# flake.nix
+{
+  inputs = {
+    systems.url = "github:nix-systems/default";
+    devenv.url = "github:cachix/devenv";
+  };
+  outputs =
+    { self, nixpkgs, devenv, systems, ... }@inputs:
+    let
+      forEachSystem = nixpkgs.lib.genAttrs (import systems);
+    in
+    {
+      packages = forEachSystem (system: {
+        devenv-up = self.devShells.${system}.default.config.procfileScript;
+      });
+
+      devShells = forEachSystem (
+        system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            config = {
+              allowUnfree = true;
+            };
+          };
+        in
+        {
+          default = devenv.lib.mkShell {
+            inherit inputs pkgs;
+            modules = [
+              ./devenv.nix
+            ];
+          };
+        }
+      );
+    };
+}
+```
 
 ---
 
 # Services flake
 
-A "services flake" usually means a flake that provides runnable services or
-service-oriented development environments.
+flake `github:juspay/services-flake`
 
-Examples:
+- Pure
 
-- start Postgres for local development
-- expose apps/scripts/checks for a team
-- share one standard environment across projects
-
-It turns setup into a reusable interface instead of tribal knowledge.
+```nix
+{
+  # 1. Add the inputs
+  inputs.process-compose-flake.url = "github:Platonic-Systems/process-compose-flake";
+  inputs.services-flake.url = "github:juspay/services-flake";
+  #...
+  outputs = inputs:
+    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [
+        # 2. Import the flake-module
+        inputs.process-compose-flake.flakeModule
+      ];
+      perSystem = { ... }: {
+        # 3. Create the process-compose configuration, importing services-flake
+        process-compose."myservices" = {
+          imports = [
+            inputs.services-flake.processComposeModules.default
+          ];
+        };
+      }
+    };
+}
+```
 
 ---
 
@@ -571,7 +632,7 @@ Use it when complexity justifies it, not on day one.
 # What to remember
 
 - Nix is an expression language that produces values
-- `shell.nix` and `mkShell` are the fastest practical win
+- `shell.nix` and `mkShell` are the fastest practical setup
 - the Nix store gives immutability and reproducibility
 - derivations are build recipes
 - flakes add a standard project structure
@@ -582,10 +643,11 @@ Use it when complexity justifies it, not on day one.
 # Next commands to try
 
 ```bash
-nix repl
-nix eval --file ./rtd-1.nix --impure
-nix eval --impure --expr '(import ./rtd-2.nix { faces = 20; })'
+nix-instantiate --eval ./rtd-1.nix
+nix-instantiate --eval ./rtd-2.nix --arg faces 20
+nix-instantiate --eval ./rtd-3.nix --arg faces 20 --arg count 4
 nix-instantiate ./bare-bones.nix
+nix repl
 ```
 
 Use the deck as a map:
