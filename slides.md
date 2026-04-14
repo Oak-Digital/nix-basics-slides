@@ -182,6 +182,10 @@ Write a Nix expression that returns a string like:
 🎲 You rolled a 4!
 ```
 
+```bash
+nix-instantiate --eval rtd.nix
+```
+
 Rules:
 
 - use `builtins.currentTime`
@@ -641,6 +645,10 @@ Use it when complexity justifies it, not on day one.
 ---
 
 # Next commands to try
+
+```bash
+git clone git@github.com:Oak-Digital/nix-basics-slides.git
+```
 
 ```bash
 nix-instantiate --eval ./rtd-1.nix
